@@ -140,10 +140,10 @@
     <script>
         // ---------- CONFIG ----------
         const DEFAULT_COORDS = { latitude: 35.6892, longitude: 51.3890 }; // Tehran fallback
-        const WAPI_KEY = '36682ff986c54c09be185419251411';
-        // <-- put your OpenWeatherMap key here
+        const WAPI_KEY = '...';
+        // <-- API key
 
-        // Compact world set (keeps API calls reasonable)
+        // Compact world set
         const WORLD_CITIES = [
             { name: 'Kuwait City, KW', lat: 29.3759, lon: 47.9774 },
             { name: 'Doha, QA', lat: 25.2854, lon: 51.5310 },
@@ -231,7 +231,7 @@
                 winddeg: c.wind_degree ?? 0,
                 condition: c.condition?.text || 'Clear',
                 description: c.condition?.text || 'Clear',
-                sunrise: 0,                  // WeatherAPI gives local strings; we keep 0 to skip night logic
+                sunrise: 0,                  
                 sunset: 0,
                 city: j.location?.name || ''
             };
@@ -258,7 +258,7 @@
                 for (const h of (d.hour || [])) {
                     const condText = h.condition?.text || 'Clear';
                     list.push({
-                        dt: h.time_epoch,  // already seconds since epoch
+                        dt: h.time_epoch,  
                         main: {
                             temp: h.temp_c,
                             humidity: h.humidity
@@ -289,7 +289,7 @@
 
 
         async function resolvePlaceName(lat, lon, source, ipgeo) {
-            // If IP lookup already gave a nice label, use that
+            
             if (source === 'ip' && ipgeo && (ipgeo.city || ipgeo.region) && ipgeo.country) {
                 const cityLike = ipgeo.city || ipgeo.region;
                 return `${cityLike}, ${ipgeo.country}`;
@@ -330,7 +330,7 @@
         }
 
 
-        // Strong weather→visual mapping
+        // weather→visual mapping
         function mapWeatherToParams(w) {
             const tempNorm = Math.max(0, Math.min(1, (w.temperature + 30) / 80)); // -30..50 → 0..1
             const windNorm = Math.min((w.windspeed ?? 0) / 25, 1);
@@ -347,7 +347,7 @@
         }
 
 
-        // Discrete, vivid palettes. Hot=red/orange, Cold=blue/cyan (no wrap surprises)
+        // Discrete, vivid palettes. Hot=red/orange, Cold=blue/cyan
         // Temperature-driven palette: cold = blue, hot = red/orange
         function paletteFromWeather(p, params) {
             p.colorMode(p.HSB, 360, 100, 100, 100);
@@ -370,7 +370,7 @@
             let sat = 80;
             let bri = 90;
 
-            // Clouds & humidity mute/dim, don’t change hue
+            // Clouds & humidity mute/dim
             sat -= hum * 0.15;     // very humid = less saturated
             bri -= clouds * 0.25;  // very cloudy = darker
             if (night) bri -= 20;
@@ -379,7 +379,7 @@
             sat = Math.max(35, Math.min(100, sat));
             bri = Math.max(35, Math.min(100, bri));
 
-            // Weather type tweaks (only sat/bright, NOT hue)
+            // Weather type tweaks
             if (cond.includes('rain') || cond.includes('drizzle')) {
                 bri -= 10;
                 sat -= 5;
@@ -392,7 +392,6 @@
                 sat += 5;
             }
 
-            // ---------- FORCE ALMOST PURE RED FOR VERY HOT ----------
             if (T >= 32) {
                 baseHue = 0;   // pure red
                 sat = 100;
@@ -400,7 +399,6 @@
             }
 
             // Two hues for gradient
-            // If very hot: stay around red (0 and 350) instead of going into orange
             const secondaryHue = (T >= 35)
                 ? 350                     // red → slightly magenta
                 : (baseHue + 20) % 360;   // normal warm/cool gradient
@@ -730,12 +728,13 @@
         async function init() {
             overlay.innerText = 'Choose: My location • Hottest • Coldest • Search city • Forecast';
             startSketch();
-            await useIPLocation(); // show something immediately
+            await useIPLocation(); 
         }
 
         // kick off
         init();
     </script>
 </body>
+
 
 </html>
