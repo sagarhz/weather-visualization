@@ -1,0 +1,741 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Weather Fractal — Living Emotion Cloud (Interactive)</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #overlay {
+            position: absolute;
+            left: 20px;
+            top: 60px;
+            color: #fff;
+            z-index: 10;
+            font-family: system-ui, Segoe UI, Roboto;
+            background: rgba(0, 0, 0, .35);
+            padding: 8px 12px;
+            border-radius: 8px;
+            backdrop-filter: blur(4px);
+            max-width: min(70vw, 680px);
+            line-height: 1.35
+        }
+
+        #consent {
+            position: absolute;
+            right: 20px;
+            top: 60px;
+            z-index: 10;
+            background: rgba(255, 255, 255, .85);
+            color: #222;
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-family: system-ui;
+            font-size: 13px;
+        }
+
+        #uiChip {
+            position: absolute;
+            right: 20px;
+            bottom: 20px;
+            z-index: 10;
+            display: flex;
+            gap: 8px;
+        }
+
+        #controls {
+            position: absolute;
+            left: 20px;
+            top: 12px;
+            right: 20px;
+            z-index: 11;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            font-family: system-ui, Segoe UI, Roboto;
+            background: rgba(0, 0, 0, .35);
+            padding: 8px 10px;
+            border-radius: 8px;
+            backdrop-filter: blur(4px);
+        }
+
+        #controls input,
+        #controls button {
+            font: 13px/1.2 system-ui, Segoe UI, Roboto;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, .18);
+            padding: 6px 10px;
+            background: rgba(255, 255, 255, .08);
+            color: #fff;
+            outline: none;
+        }
+
+        #controls button {
+            cursor: pointer
+        }
+
+        #forecastBar {
+            position: absolute;
+            left: 20px;
+            right: 20px;
+            bottom: 72px;
+            z-index: 10;
+            display: none;
+            gap: 10px;
+            align-items: center;
+            font-family: system-ui;
+            background: rgba(0, 0, 0, .35);
+            padding: 8px 10px;
+            border-radius: 8px;
+            color: #fff;
+            backdrop-filter: blur(4px);
+        }
+
+        #forecastBar input[type="range"] {
+            width: min(70vw, 560px);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Controls -->
+    <div id="controls">
+        <button id="btnMy">My location</button>
+        <button id="btnHottest">Hottest now</button>
+        <button id="btnColdest">Coldest now</button>
+        <input id="cityInput" placeholder="Search city (e.g., Tokyo)" />
+        <button id="btnGo">Go</button>
+        <button id="btnForecast">Forecast</button>
+    </div>
+
+    <div id="overlay">Loading weather → fractal…</div>
+    <div id="consent" style="display:none">
+        Use precise location?
+        <button id="allowBtn">Yes (better visuals)</button>
+        <button id="noBtn">No — use IP location</button>
+    </div>
+    <div id="uiChip">
+        <button id="toggleInfo">Info</button>
+        <button id="togglePause">Pause</button>
+    </div>
+
+    <!-- Forecast bar -->
+    <div id="forecastBar">
+        <span id="forecastLabel">Now</span>
+        <input id="forecastSlider" type="range" min="0" max="0" step="1" value="0" />
+    </div>
+
+    <!-- p5.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+
+    <script>
+        // ---------- CONFIG ----------
+        const DEFAULT_COORDS = { latitude: 35.6892, longitude: 51.3890 }; // Tehran fallback
+        const WAPI_KEY = '36682ff986c54c09be185419251411';
+        // <-- put your OpenWeatherMap key here
+
+        // Compact world set (keeps API calls reasonable)
+        const WORLD_CITIES = [
+            { name: 'Kuwait City, KW', lat: 29.3759, lon: 47.9774 },
+            { name: 'Doha, QA', lat: 25.2854, lon: 51.5310 },
+            { name: 'Dubai, AE', lat: 25.2048, lon: 55.2708 },
+            { name: 'Riyadh, SA', lat: 24.7136, lon: 46.6753 },
+            { name: 'Delhi, IN', lat: 28.6139, lon: 77.2090 },
+            { name: 'Bangkok, TH', lat: 13.7563, lon: 100.5018 },
+            { name: 'Singapore, SG', lat: 1.3521, lon: 103.8198 },
+            { name: 'Lagos, NG', lat: 6.5244, lon: 3.3792 },
+            { name: 'Mexico City, MX', lat: 19.4326, lon: -99.1332 },
+            { name: 'Phoenix, US', lat: 33.4484, lon: -112.0740 },
+            { name: 'Reykjavik, IS', lat: 64.1466, lon: -21.9426 },
+            { name: 'Ulaanbaatar, MN', lat: 47.8864, lon: 106.9057 },
+            { name: 'Helsinki, FI', lat: 60.1699, lon: 24.9384 },
+            { name: 'Moscow, RU', lat: 55.7558, lon: 37.6173 },
+            { name: 'Toronto, CA', lat: 43.6532, lon: -79.3832 },
+            { name: 'Sapporo, JP', lat: 43.0618, lon: 141.3545 },
+            { name: 'Sydney, AU', lat: -33.8688, lon: 151.2093 },
+            { name: 'Santiago, CL', lat: -33.4489, lon: -70.6693 }
+        ];
+
+        const overlay = document.getElementById('overlay');
+        const consentDiv = document.getElementById('consent');
+        const allowBtn = document.getElementById('allowBtn');
+        const noBtn = document.getElementById('noBtn');
+        const btnMy = document.getElementById('btnMy');
+        const btnHottest = document.getElementById('btnHottest');
+        const btnColdest = document.getElementById('btnColdest');
+        const cityInput = document.getElementById('cityInput');
+        const btnGo = document.getElementById('btnGo');
+        const btnForecast = document.getElementById('btnForecast');  // <-- only declared once
+        const forecastBar = document.getElementById('forecastBar');
+        const forecastSlider = document.getElementById('forecastSlider');
+        const forecastLabel = document.getElementById('forecastLabel');
+
+        // ---------- GLOBAL STATE ----------
+        let weatherParams = null;
+        let currentCoords = null;
+        let currentPlaceLabel = '';
+        let canvasW = window.innerWidth, canvasH = window.innerHeight;
+        let lastMouse = { x: 0, y: 0 };
+        let precip = [];      // rain/snow particles
+        let flashUntil = 0;   // thunder flash
+        let paused = false;   // screen pause
+        let forecastMode = false;
+        let forecastData = null; // OWM 5-day/3-hour
+        let forecastIndex = 0;
+
+        // ---------- HELPERS ----------
+        async function getIPGeo() {
+            try {
+                const r = await fetch('https://ipwho.is/');
+                if (!r.ok) throw new Error('ipwho.is failed');
+                const j = await r.json();
+                if (j && j.success !== false && j.latitude && j.longitude) {
+                    return {
+                        latitude: j.latitude,
+                        longitude: j.longitude,
+                        city: j.city || j.region,
+                        region: j.region,
+                        country: j.country
+                    };
+                }
+            } catch (e) { console.warn('ipwho.is error', e); }
+            return null;
+        }
+
+        async function getWeather(lat, lon) {
+            if (!WAPI_KEY) throw new Error('WeatherAPI key missing');
+
+            const url = `https://api.weatherapi.com/v1/current.json?key=${WAPI_KEY}&q=${lat},${lon}&aqi=no`;
+            const r = await fetch(url);
+            const j = await r.json();
+
+            if (!r.ok || j.error) {
+                throw new Error(j.error?.message || 'WeatherAPI current fetch failed');
+            }
+
+            const c = j.current;
+            return {
+                temperature: c.temp_c,
+                humidity: c.humidity,
+                clouds: c.cloud ?? 0,
+                windspeed: c.wind_kph != null ? c.wind_kph / 3.6 : 0,  // kph → m/s
+                winddeg: c.wind_degree ?? 0,
+                condition: c.condition?.text || 'Clear',
+                description: c.condition?.text || 'Clear',
+                sunrise: 0,                  // WeatherAPI gives local strings; we keep 0 to skip night logic
+                sunset: 0,
+                city: j.location?.name || ''
+            };
+        }
+
+
+        async function getForecast(lat, lon) {
+            if (!WAPI_KEY) throw new Error('WeatherAPI key missing');
+
+            const url =
+                `https://api.weatherapi.com/v1/forecast.json?key=${WAPI_KEY}` +
+                `&q=${lat},${lon}&days=3&aqi=no&alerts=no`;
+            const r = await fetch(url);
+            const j = await r.json();
+
+            if (!r.ok || j.error) {
+                throw new Error(j.error?.message || 'WeatherAPI forecast fetch failed');
+            }
+
+            const days = j.forecast?.forecastday || [];
+            const list = [];
+
+            for (const d of days) {
+                for (const h of (d.hour || [])) {
+                    const condText = h.condition?.text || 'Clear';
+                    list.push({
+                        dt: h.time_epoch,  // already seconds since epoch
+                        main: {
+                            temp: h.temp_c,
+                            humidity: h.humidity
+                        },
+                        clouds: { all: h.cloud ?? 0 },
+                        wind: {
+                            speed: (h.wind_kph ?? 0) / 3.6,
+                            deg: h.wind_degree ?? 0
+                        },
+                        weather: [{
+                            main: condText,
+                            description: condText
+                        }]
+                    });
+                }
+            }
+
+            return {
+                list,
+                city: {
+                    sunrise: 0,
+                    sunset: 0,
+                    name: j.location?.name || ''
+                },
+                cod: "200"
+            };
+        }
+
+
+        async function resolvePlaceName(lat, lon, source, ipgeo) {
+            // If IP lookup already gave a nice label, use that
+            if (source === 'ip' && ipgeo && (ipgeo.city || ipgeo.region) && ipgeo.country) {
+                const cityLike = ipgeo.city || ipgeo.region;
+                return `${cityLike}, ${ipgeo.country}`;
+            }
+
+            try {
+                if (!WAPI_KEY) throw new Error('missing WeatherAPI key');
+                const url =
+                    `https://api.weatherapi.com/v1/search.json?key=${WAPI_KEY}&q=${lat},${lon}`;
+                const r = await fetch(url);
+                const j = await r.json();
+                if (Array.isArray(j) && j.length) {
+                    const g = j[0];
+                    const parts = [g.name, g.region, g.country].filter(Boolean);
+                    return parts.join(', ');
+                }
+            } catch (e) {
+                console.warn('reverse geocode failed', e);
+            }
+            return `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+        }
+
+
+        async function geocodeCity(q) {
+            const url =
+                `https://api.weatherapi.com/v1/search.json?key=${WAPI_KEY}&q=${encodeURIComponent(q)}`;
+            const r = await fetch(url);
+            const j = await r.json();
+            if (Array.isArray(j) && j.length) {
+                const g = j[0];
+                return {
+                    lat: g.lat,
+                    lon: g.lon,
+                    label: [g.name, g.region, g.country].filter(Boolean).join(', ')
+                };
+            }
+            throw new Error('City not found');
+        }
+
+
+        // Strong weather→visual mapping
+        function mapWeatherToParams(w) {
+            const tempNorm = Math.max(0, Math.min(1, (w.temperature + 30) / 80)); // -30..50 → 0..1
+            const windNorm = Math.min((w.windspeed ?? 0) / 25, 1);
+            const humidityNorm = (w.humidity ?? 0) / 100;
+            const cloudNorm = (w.clouds ?? 0) / 100;
+            const turbulence = 0.25 + windNorm * 1.6;
+            const iterations = 60 + Math.round(260 * windNorm);
+            return { colorShift: tempNorm, turbulence, iterations, ...w, humidityNorm, cloudNorm, windNorm };
+        }
+
+        function isNightNow(sunriseUTC, sunsetUTC) {
+            const nowUTC = Math.floor(Date.now() / 1000);
+            return sunriseUTC && sunsetUTC ? (nowUTC < sunriseUTC || nowUTC > sunsetUTC) : false;
+        }
+
+
+        // Discrete, vivid palettes. Hot=red/orange, Cold=blue/cyan (no wrap surprises)
+        // Temperature-driven palette: cold = blue, hot = red/orange
+        function paletteFromWeather(p, params) {
+            p.colorMode(p.HSB, 360, 100, 100, 100);
+
+            const T = Number(params.temperature ?? 20);      // °C
+            const clouds = Math.max(0, Math.min(100, params.clouds ?? 0));
+            const hum = Math.max(0, Math.min(100, params.humidity ?? 0));
+            const cond = (params.condition || '').toLowerCase();
+            const night = isNightNow(params.sunrise, params.sunset);
+
+            // Map temperature -20..40°C  →  0..1
+            const Tnorm = Math.max(0, Math.min(1, (T + 20) / 60));
+
+            // Hue base: 220 (cold blue) → 20 (warm orange)
+            const hueCold = 220;
+            const hueHot = 20;
+            let baseHue = hueCold + (hueHot - hueCold) * Tnorm;
+
+            // Base saturation/brightness
+            let sat = 80;
+            let bri = 90;
+
+            // Clouds & humidity mute/dim, don’t change hue
+            sat -= hum * 0.15;     // very humid = less saturated
+            bri -= clouds * 0.25;  // very cloudy = darker
+            if (night) bri -= 20;
+
+            // Clamp
+            sat = Math.max(35, Math.min(100, sat));
+            bri = Math.max(35, Math.min(100, bri));
+
+            // Weather type tweaks (only sat/bright, NOT hue)
+            if (cond.includes('rain') || cond.includes('drizzle')) {
+                bri -= 10;
+                sat -= 5;
+            }
+            if (cond.includes('snow')) {
+                bri += 5;
+                sat -= 15;
+            }
+            if (cond.includes('thunder')) {
+                sat += 5;
+            }
+
+            // ---------- FORCE ALMOST PURE RED FOR VERY HOT ----------
+            if (T >= 32) {
+                baseHue = 0;   // pure red
+                sat = 100;
+                bri = 100;
+            }
+
+            // Two hues for gradient
+            // If very hot: stay around red (0 and 350) instead of going into orange
+            const secondaryHue = (T >= 35)
+                ? 350                     // red → slightly magenta
+                : (baseHue + 20) % 360;   // normal warm/cool gradient
+
+            const c1 = p.color(baseHue, sat, bri, 90);
+            const c2 = p.color(
+                secondaryHue,
+                Math.max(35, sat - 5),
+                Math.min(100, bri + 8),
+                80
+            );
+
+            return [c1, c2];
+        }
+
+
+
+
+
+
+
+        function windVector(params) {
+            const sp = params.windspeed ?? 0; // m/s
+            const deg = (params.winddeg ?? 0) * Math.PI / 180;
+            const mag = Math.min(sp / 15, 1);
+            return { x: Math.cos(deg) * mag, y: Math.sin(deg) * mag, mag };
+        }
+
+        // precipitation
+        function resetPrecip() { precip.length = 0; }
+        function spawnPrecip(kind, density, w, h) {
+            for (let i = 0; i < density; i++) {
+                precip.push({
+                    x: Math.random() * w, y: Math.random() * h,
+                    v: kind === 'snow' ? (0.3 + Math.random() * 0.7) : (3 + Math.random() * 3.5),
+                    drift: kind === 'snow' ? (Math.random() * 0.6 - 0.3) : 0,
+                    s: kind === 'snow' ? (1 + Math.random() * 2.5) : (1 + Math.random() * 1.5),
+                    kind
+                });
+            }
+        }
+        function renderPrecip(p, kind, w, h) {
+            if (!precip.length) return;
+            p.push();
+            p.noStroke();
+            p.colorMode(p.RGB, 255, 255, 255, 255);
+            const alpha = kind === 'snow' ? 170 : 140;
+            for (const d of precip) {
+                p.fill(255, 255, 255, alpha);
+                if (d.kind === 'snow') p.ellipse(d.x, d.y, d.s, d.s);
+                else p.rect(d.x, d.y, 1.2, d.s * 3);
+                d.y += d.v; d.x += d.drift;
+                if (d.y > h) { d.y = -10; d.x = Math.random() * w; }
+                if (d.x < 0) d.x += w; if (d.x > w) d.x -= w;
+            }
+            p.pop();
+        }
+
+        // ---------- p5 sketch ----------
+        const sketch = (p) => {
+            p.setup = () => {
+                p.createCanvas(canvasW, canvasH);
+                p.pixelDensity(1);
+                p.noStroke();
+                p.frameRate(60);
+                p.colorMode(p.HSB, 360, 100, 100, 100);
+            };
+
+            p.draw = () => {
+                if (paused) return;
+
+                p.clear();
+                if (!weatherParams) { p.background(0, 0, 10); return; }
+
+                const t = p.millis() * 0.00012;
+                const [col1, col2] = paletteFromWeather(p, weatherParams);
+                const wv = windVector(weatherParams);
+
+                p.push();
+                p.translate(canvasW / 2 + wv.x * 30, canvasH / 2 + wv.y * 30);
+                p.rotate(wv.x * 0.05);
+
+                const layers = Math.max(6, Math.round(8 + (weatherParams.iterations / 80)));
+                for (let L = 0; L < layers; L++) {
+                    const layerFactor = L / layers;
+                    const radius = (Math.min(canvasW, canvasH) * 0.15) + layerFactor * Math.min(canvasW, canvasH) * 0.55;
+                    const noiseScale = 0.0025 + weatherParams.turbulence * 0.004 * (1 + layerFactor);
+
+                    const c = p.lerpColor(col1, col2, layerFactor);
+                    c.setAlpha(3 + layerFactor * 5); // was 25 + ...
+                    p.fill(c);
+
+
+                    p.beginShape();
+                    const steps = 160 + Math.round(layerFactor * 200 * ((weatherParams.iterations / 200)));
+                    for (let i = 0; i < steps; i++) {
+                        const a = (i / steps) * Math.PI * 2;
+                        const nx = Math.cos(a) * (radius + (p.noise(Math.cos(a) + t * 0.2, Math.sin(a) + t * 0.3) - 0.5) * radius * noiseScale * 800);
+                        const ny = Math.sin(a) * (radius + (p.noise(Math.cos(a) * 1.5 + t * 0.4, Math.sin(a) * 1.2 + t * 0.5) - 0.5) * radius * noiseScale * 800);
+
+                        const mx = (lastMouse.x - canvasW / 2) / canvasW;
+                        const my = (lastMouse.y - canvasH / 2) / canvasH;
+                        const windPush = (wv.x * Math.cos(a) + wv.y * Math.sin(a)) * 25 * (1 - layerFactor);
+                        const cursorPush = (mx * Math.cos(a) + my * Math.sin(a)) * 0.5 * (1 - layerFactor) * 40;
+
+                        p.vertex(nx + cursorPush + windPush, ny + cursorPush + windPush);
+                    }
+                    p.endShape(p.CLOSE);
+                }
+                p.pop();
+
+                const cond = (weatherParams.condition || '').toLowerCase();
+                if (cond.includes('rain') || cond.includes('drizzle')) renderPrecip(p, 'rain', canvasW, canvasH);
+                if (cond.includes('snow')) renderPrecip(p, 'snow', canvasW, canvasH);
+
+
+                p.push();
+                p.colorMode(p.RGB, 255, 255, 255, 255);
+                p.blendMode(p.MULTIPLY);
+                p.fill(0, 0, 0, 40);   // was 90
+                p.rect(0, 0, canvasW, canvasH);
+                p.pop();
+
+            };
+
+            p.windowResized = () => {
+                canvasW = window.innerWidth; canvasH = window.innerHeight;
+                p.resizeCanvas(canvasW, canvasH);
+            };
+            p.mouseMoved = () => { lastMouse.x = p.mouseX; lastMouse.y = p.mouseY; };
+            p.touchMoved = () => { lastMouse.x = p.mouseX; lastMouse.y = p.mouseY; };
+        };
+
+        // ---------- UI ----------
+        document.getElementById('toggleInfo').onclick = () => {
+            overlay.style.display = (overlay.style.display === 'none') ? 'block' : 'none';
+        };
+        document.getElementById('togglePause').onclick = (e) => {
+            paused = !paused;
+            e.target.textContent = paused ? 'Resume' : 'Pause';
+        };
+        btnForecast.onclick = async () => {
+            forecastMode = !forecastMode;
+            forecastBar.style.display = forecastMode ? 'flex' : 'none';
+            btnForecast.textContent = forecastMode ? 'Close Forecast' : 'Forecast';
+            if (forecastMode && currentCoords) {
+                await ensureForecast(currentCoords.latitude, currentCoords.longitude);
+            }
+        };
+        btnMy.onclick = async () => { consentDiv.style.display = 'block'; };
+        btnHottest.onclick = async () => {
+            overlay.innerText = 'Searching hottest city…';
+            const pick = await pickExtremeCity('max');
+            await goToCoords(pick.lat, pick.lon, 'preset', null, pick.name);
+        };
+        btnColdest.onclick = async () => {
+            overlay.innerText = 'Searching coldest city…';
+            const pick = await pickExtremeCity('min');
+            await goToCoords(pick.lat, pick.lon, 'preset', null, pick.name);
+        };
+        btnGo.onclick = async () => {
+            const q = cityInput.value.trim();
+            if (!q) return;
+            try {
+                overlay.innerText = `Searching "${q}"…`;
+                const g = await geocodeCity(q);
+                await goToCoords(g.lat, g.lon, 'search', null, g.label);
+            } catch (e) {
+                overlay.innerHTML = `Could not find "${q}".`;
+                console.warn(e);
+            }
+        };
+
+        // consent handlers
+        allowBtn.onclick = async () => {
+            consentDiv.style.display = 'none';
+            overlay.innerText = 'Requesting browser geolocation…';
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                await goToCoords(pos.coords.latitude, pos.coords.longitude, 'user-permission', null, null);
+            }, async (err) => {
+                console.warn('geolocation denied/fail', err);
+                overlay.innerText = 'Geolocation failed, using IP location…';
+                await useIPLocation();
+            }, { enableHighAccuracy: false, timeout: 8000 });
+        };
+        noBtn.onclick = async () => {
+            consentDiv.style.display = 'none';
+            overlay.innerText = 'Using IP-based location…';
+            await useIPLocation();
+        };
+
+        // ---------- ORCHESTRATION ----------
+        function startSketch() { new p5(sketch, document.body); }
+
+        async function useIPLocation() {
+            try {
+                const ipgeo = await getIPGeo();
+                const coords = ipgeo ? { latitude: ipgeo.latitude, longitude: ipgeo.longitude } : DEFAULT_COORDS;
+                await goToCoords(coords.latitude, coords.longitude, 'ip', ipgeo, null);
+            } catch (e) {
+                console.warn(e);
+                overlay.innerText = 'Failed to determine location; using fallback.';
+                await goToCoords(DEFAULT_COORDS.latitude, DEFAULT_COORDS.longitude, 'fallback', null, null);
+            }
+        }
+
+        async function ensureForecast(lat, lon) {
+            try {
+                forecastData = await getForecast(lat, lon);
+                const n = Math.max(0, (forecastData.list?.length ?? 1) - 1);
+                forecastSlider.max = String(n);
+                forecastSlider.value = "0";
+                updateForecastPreview(0);
+            } catch (e) {
+                console.warn('Forecast fetch failed', e);
+                forecastData = null;
+                forecastBar.style.display = 'none';
+                btnForecast.textContent = 'Forecast';
+                forecastMode = false;
+            }
+        }
+
+        forecastSlider.addEventListener('input', (e) => updateForecastPreview(parseInt(e.target.value, 10)));
+
+        function updateForecastPreview(idx) {
+            if (!forecastData) return;
+            const entry = forecastData.list[idx];
+            forecastIndex = idx;
+            const dt = entry.dt * 1000;
+            const d = new Date(dt);
+            const timeLabel = d.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+
+            const simWeather = {
+                temperature: entry.main.temp,
+                humidity: entry.main.humidity,
+                clouds: entry.clouds?.all ?? 0,
+                windspeed: entry.wind?.speed ?? 0,
+                winddeg: entry.wind?.deg ?? 0,
+                condition: entry.weather?.[0]?.main ?? 'Clear',
+                description: entry.weather?.[0]?.description ?? '',
+                sunrise: forecastData.city?.sunrise,
+                sunset: forecastData.city?.sunset
+            };
+            weatherParams = mapWeatherToParams(simWeather);
+
+            resetPrecip();
+            const cond = (simWeather.condition || '').toLowerCase();
+            const hum = weatherParams.humidity ?? 50;
+            const dens = Math.floor((cond.includes('rain') ? 100 : cond.includes('snow') ? 70 : cond.includes('drizzle') ? 60 : 0) * (0.5 + hum / 200));
+            const maxD = (window.innerWidth < 640) ? 80 : 160;
+            if (dens > 0) spawnPrecip(cond.includes('snow') ? 'snow' : 'rain', Math.min(dens, maxD), window.innerWidth, window.innerHeight);
+
+            overlay.innerHTML = `
+      <strong>Showing weather for:</strong> ${currentPlaceLabel || (currentCoords ? `${currentCoords.latitude.toFixed(3)}, ${currentCoords.longitude.toFixed(3)}` : '—')}
+      <br>Forecast @ ${timeLabel}: ${Math.round(weatherParams.temperature)}°C, wind ${Math.round(weatherParams.windspeed)} m/s, ${simWeather.description || simWeather.condition}
+      <br><small>Forecast preview • Move your mouse to interact</small>`;
+        }
+
+        async function goToCoords(lat, lon, source, ipgeo, forcedLabel) {
+            try {
+                overlay.innerText = `Fetching weather at ${lat.toFixed(2)}, ${lon.toFixed(2)}…`;
+                let weather;
+                try {
+                    weather = await getWeather(lat, lon);
+                } catch (err) {
+                    console.warn('Weather fetch failed, using synthetic', err);
+                    const now = new Date();
+                    const hour = now.getUTCHours();
+                    const temp = 10 + 10 * Math.sin((hour / 24) * Math.PI * 2);
+                    weather = { temperature: temp, humidity: 60, clouds: 30, windspeed: 3, condition: 'Clear', description: 'synthetic', city: '—', sunrise: 0, sunset: 0 };
+                }
+
+                currentCoords = { latitude: lat, longitude: lon };
+                currentPlaceLabel = forcedLabel || await resolvePlaceName(lat, lon, source, ipgeo);
+
+                weatherParams = mapWeatherToParams(weather);
+
+                resetPrecip();
+                const cond = (weather.condition || '').toLowerCase();
+                const hum = weatherParams.humidity ?? 50;
+                const density = Math.floor((cond.includes('rain') ? 100 : cond.includes('snow') ? 70 : cond.includes('drizzle') ? 60 : 0) * (0.5 + hum / 200));
+                const maxDensity = (window.innerWidth < 640) ? 80 : 160;
+                if (density > 0) spawnPrecip(cond.includes('snow') ? 'snow' : 'rain', Math.min(density, maxDensity), window.innerWidth, window.innerHeight);
+
+                overlay.innerHTML = `
+        <strong>Showing weather for:</strong> ${currentPlaceLabel}<br>
+        Now: ${Math.round(weatherParams.temperature)}°C, wind ${Math.round(weatherParams.windspeed)} m/s, ${weather.description || weather.condition}
+        <br><small>Source: ${source} • Move your mouse to interact • Use “Forecast” to scrub future</small>`;
+
+                if (forecastMode) { await ensureForecast(lat, lon); }
+            } catch (e) {
+                console.error('Fatal error', e);
+                overlay.innerHTML = `Weather fetch failed; showing default aesthetic.<br><small>${e.message}</small>`;
+                weatherParams = mapWeatherToParams({ temperature: 18, windspeed: 2, humidity: 40, clouds: 20, sunrise: 0, sunset: 0 });
+            }
+        }
+
+        async function pickExtremeCity(kind) { // kind: 'max' | 'min'
+            const results = await Promise.allSettled(
+                WORLD_CITIES.map(c =>
+                    getWeather(c.lat, c.lon).then(w => ({
+                        name: c.name,
+                        lat: c.lat,
+                        lon: c.lon,
+                        t: w.temperature
+                    }))
+                )
+            );
+
+            const temps = results
+                .filter(r => r.status === 'fulfilled')
+                .map(r => r.value);
+
+            if (!temps.length) throw new Error('Could not fetch cities');
+
+            const pick = temps.reduce((best, cur) => {
+                if (!best) return cur;
+                return (kind === 'max')
+                    ? (cur.t > best.t ? cur : best)
+                    : (cur.t < best.t ? cur : best);
+            }, null);
+
+            return pick;
+        }
+
+
+        async function init() {
+            overlay.innerText = 'Choose: My location • Hottest • Coldest • Search city • Forecast';
+            startSketch();
+            await useIPLocation(); // show something immediately
+        }
+
+        // kick off
+        init();
+    </script>
+</body>
+
+</html>
